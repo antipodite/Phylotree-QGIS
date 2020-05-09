@@ -66,3 +66,6 @@ target/
 
 # Pylint
 pylintrc
+
+# vs code
+.vscode/
