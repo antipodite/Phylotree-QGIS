@@ -1,0 +1,24 @@
+Austronesian
+    Philippines
+        Ilocano
+        Tagalog
+    Western Indonesian
+        Kelabit
+        Malayic
+            Achenese
+            Chamic
+            Malay
+    Sumatran
+        Enggano
+    South Sulawesi
+        Bugis
+        Makassarese
+    Celebic
+        Wolio
+    Central-Eastern Malayo-Polynesian
+        Oceanic
+            Maori
+        Lamaholot
+    Palauan
+    Chamorro
+    Moken
