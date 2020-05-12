@@ -30,15 +30,20 @@ __copyright__ = '(C) 2020 by Isaac Stead'
 
 __revision__ = '$Format:%H$'
 
-from qgis.PyQt.QtCore import QCoreApplication
+from qgis.PyQt.QtCore import QCoreApplication, QVariant
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
                        QgsProcessingAlgorithm,
                        QgsProcessingParameterFeatureSource,
                        QgsProcessingParameterFeatureSink,
-                       QgsProcessingParameterFile)
-
-from .trees.parse_tree import build_tree_from_file
+                       QgsProcessingParameterFile,
+                       QgsFields,
+                       QgsField,
+                       QgsFeature,
+                       QgsPointXY,
+                       QgsGeometry)
+from os.path import splitext
+from .trees import read_indent, read_newick, layout
 
 class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
     """
@@ -61,6 +66,16 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
     OUTPUT = 'OUTPUT'
     INPUTLAYER = 'INPUTLAYER'
     INPUTTREE = 'INPUTTREE'
+    OUT_FIELDS = {
+        'id':     QVariant.Int,
+        'label':  QVariant.String,
+        'startx': QVariant.Double,
+        'starty': QVariant.Double,
+        'endx':   QVariant.Double,
+        'endy':   QVariant.Double
+    }
+    SCALE_X = 1.0
+    SCALE_Y = 1.0
 
     def initAlgorithm(self, config):
         """
@@ -132,31 +147,67 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, feedback):
         
         layer = self.parameterAsSource(parameters, self.INPUTLAYER, context)
-        treefile = self.parameterAsFile(parameters, self.INPUTTREE, context)
+        fname = self.parameterAsFile(parameters, self.INPUTTREE, context)
 
-        logmsg = layer.sourceName() + ' ' + treefile
+        # Set up fields for the output layer
+        out_fields = QgsFields()
+        for name, typ in self.OUT_FIELDS.items():
+            out_fields.append(QgsField(name, typ))
+        
+        (sink, dest_id) = self.parameterAsSink(
+            parameters, self.OUTPUT, context, out_fields,
+            layer.wkbType(), layer.sourceCrs()
+        )
+
+        logmsg = layer.sourceName() + ' ' + fname
         feedback.pushConsoleInfo(logmsg)
 
-        # TODO Check the extension of INPUTTREE and select Newick or Indent
+        # Check the extension of INPUTTREE and select Newick or Indent
         # loader as necessary
-
-        tree = build_tree_from_file(treefile)
-        features = layer.getFeatures()
-
-        # TODO Transform the tree into one which can be used by Bill Mill's
-        # Rheingold-Tilford implementation
-
+        _, ext = splitext(fname)
+        if ext == '.nwk':
+            tree = read_newick(fname)[0]
+        if ext == '.txt':
+            tree = read_indent(fname)[0]
+        
         # Run RT and get proportional tree node positions
+        layout(tree)
+        nodes = [node for node in tree.walk()]
+        
+        # Translate proportional positions to map scale
+        root_pos = (45, 45) # TODO choose this more intelligently based on data
+        for i, node in  enumerate(nodes):
+            # Translate proportional positions to map scale
+            x, y = node.coord
+            rootx, rooty = root_pos
+            if not node.ancestor:
+                new_x, new_y = root_pos
+            else:
+                new_x = (self.SCALE_X * x) + rootx
+                new_y = (self.SCALE_Y * y) + rooty
+            # Now create node features with the translated positions
+            feat = QgsFeature(out_fields)
+            feat['id'] = i
+            feat['label'] = node.name
+            feat['startx'] = new_x
+            feat['starty'] = new_y
+            geom = QgsGeometry.fromPointXY(QgsPointXY(new_x, new_y)) # ???
+            feat.setGeometry(geom)
+            sink.addFeature(feat, QgsFeatureSink.FastInsert)
+
+        # Get feature names and positions. Probably need to get user to
+        # specify the feature field to match on
+        features = layer.getFeatures()
 
         # Get a list of leaf nodes and attempt to match them by name
         # with features from the source layer
+        leaves = tree.get_leaves()
 
-        # Start drawing the tree by running lines on the layer between
-        # tree nodes, and then between leaf nodes and features based on
-        # output from previous step
+        # Now we need to figure out how to draw the tree on a new layer.
+        # - Seems like 
 
 
-        return {}
+        return {self.OUTPUT: dest_id}
 
 
     def name(self):

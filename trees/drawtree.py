@@ -1,6 +1,6 @@
 """
-    Bill Mill's implementation of the Rheingold-Tilford algorithm for 
-    drawing balanced trees, from https://github.com/llimllib/pymag-trees
+    Contains Bill Mill's implementation of the Rheingold-Tilford algorithm
+    for drawing balanced trees, from https://github.com/llimllib/pymag-trees
 
     Will work on any tree representation that has a list of descendants
     for each node as a property of that node.
@@ -54,6 +54,18 @@ class DrawTree(object):
         for node in self.children:
             for n in node.walk():
                 yield n
+
+    def all_positions(self):
+        """
+        Return a flat dict of self.tree: self.coords. Used to match
+        calculated positions with nodes in the tree this DrawTree was 
+        created from.
+        """
+        return {node.tree: node.coords for node in self.walk()}
+
+    @property
+    def coords(self):
+        return (self.x, self.y)
 
     def __str__(self): return "%s: x=%s mod=%s" % (self.tree, self.x, self.mod)
     def __repr__(self): return self.__str__()
@@ -167,3 +179,75 @@ def second_walk(v, m=0, depth=0, min=None):
         min = second_walk(w, m + v.mod, depth+1, min)
 
     return min
+
+def layout(nodetree):
+    """
+    Calculate and add positions for python-newick Node tree
+    """
+    drawtree = buchheim(nodetree)
+    positions = drawtree.all_positions()
+    for node in nodetree.walk():
+        node.coord = positions[node]
+
+def translate(point, x, y):
+    px, py = point
+    return (px + x, py + y)
+
+def slope(a, b):
+    xa, ya = a
+    xb, yb = b
+    return (ya - yb) / (xa - xb)
+
+def intercept(point, slope):
+    x, y = point
+    return y - (slope * x)
+
+def line(a, b):
+    s = slope(a, b)
+    i = intercept(a, s)
+    return s, i
+
+def intersection(a, b, c, d):
+    try:
+        ab_s, ab_i = line(a, b)
+        cd_s, cd_i = line(c, d)
+        x = (cd_i - ab_i) / (ab_s - cd_s)
+        y = ab_s * ((cd_i - ab_i) / (ab_s - cd_s)) + ab_i
+    except ZeroDivisionError:
+        return False
+    return x, y
+
+# These should really all be methods of DrawTree its getting kinda
+# confusing 
+
+def treecenter(tree):
+    """
+    Calculate the central point of the box formed by the maximum
+    extent of the tree
+    """
+    coords = [node.coord for node in tree.walk()]
+    xs = [coord[0] for coord in coords]
+    ys = [coord[1] for coord in coords]
+    max_x, min_x = max(xs), min(xs)
+    max_y, min_y = max(ys), min(ys)
+    return intersection(
+        (min_x, min_y), (max_x, max_y),
+        (min_x, max_y), (max_x, min_y)
+    )
+
+def shiftxy(tree, point):
+    """
+    Calculate the x and y values for translation of an entire
+    tree such that the center of its bounding box now lies
+    over `point`.
+    """
+    new_x, new_y = point
+    old_x, old_y = treecenter(tree)
+    return new_x - old_x, new_y - old_y
+
+def translate_tree(tree):
+    shift_x, shift_y = shiftxy(tree)
+    for node in tree.walk():
+        old_x, old_y = node.coord
+        node.coord = (old_x - shift_x, old_y - shift_y)
+        

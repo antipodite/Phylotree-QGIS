@@ -1,5 +1,6 @@
 """
     Parse language trees in indented format.
+    (c) Isaac Stead 2020
 
     Expects a plain text file with the tree specified like this:
 
@@ -14,7 +15,7 @@
     At this point, indents should be 4 spaces.
 """
 from collections import namedtuple
-from newick import Node
+from .newick import Node
 
 INDENT_CHARS = ('\t', ' ')
 INDENT_LEVEL = 4
