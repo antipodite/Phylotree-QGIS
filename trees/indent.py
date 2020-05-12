@@ -39,21 +39,26 @@ def load_treefile(path, indent_size=INDENT_LEVEL):
         lines = f.readlines()   
     return [process_line(l, indent_size) for l in lines]
 
-def build_tree(items, depth=0, level=[]):
-    while items:
-        d, name = items[0]
-        if d == depth:
-            new = Node(name)
-            if not level:
-                level.append(new)
-            else:
-                level.add_descendant(new)
-            items.pop(0)
-        elif d > depth:
-            build_tree(items, d, new)
-        elif d < depth:
-            return
-    return level
+def build_tree(lines):
+    items = lines.copy()
+
+    def inner(items, depth=0, level=[]):
+        while items:
+            d, name = items[0]
+            if d == depth:
+                new = Node(name)
+                if not level:
+                    level.append(new)
+                else:
+                    level.add_descendant(new)
+                items.pop(0)
+            elif d > depth:
+                inner(items, d, new)
+            elif d < depth:
+                return
+        return level
+
+    return inner(items)
 
 def read(path):
     return build_tree(load_treefile(path))

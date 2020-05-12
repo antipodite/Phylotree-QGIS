@@ -46,6 +46,8 @@ class DrawTree(object):
         return self._lmost_sibling
     lmost_sibling = property(get_lmost_sibling)
 
+    # Isaac's mods start here
+
     def walk(self):
         """
         Traverse the whole tree and yield each visited node in preorder
@@ -62,6 +64,16 @@ class DrawTree(object):
         created from.
         """
         return {node.tree: node.coords for node in self.walk()}
+
+    @property
+    def max_xy(self):
+        all_xy = [(node.x, node.y) for node in self.walk()]
+        return map(max(zip(*all_xy)))
+
+    @property
+    def min_xy(self):
+        all_xy = [(node.x, node.y) for node in self.walk()]
+        return map(min(zip(*all_xy)))
 
     @property
     def coords(self):
