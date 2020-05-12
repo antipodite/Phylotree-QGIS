@@ -69,6 +69,7 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
     OUT_FIELDS = {
         'id':     QVariant.Int,
         'label':  QVariant.String,
+        'ancestor':  QVariant.String,
         'startx': QVariant.Double,
         'starty': QVariant.Double,
         'endx':   QVariant.Double,
@@ -189,6 +190,8 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
             feat = QgsFeature(out_fields)
             feat['id'] = i
             feat['label'] = node.name
+            if node.ancestor:
+                feat['ancestor'] = node.ancestor.name
             feat['startx'] = new_x
             feat['starty'] = new_y
             geom = QgsGeometry.fromPointXY(QgsPointXY(new_x, new_y)) # ???
