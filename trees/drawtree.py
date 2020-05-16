@@ -8,6 +8,8 @@
     Modifications (c) Isaac Stead 2020
 """
 import os
+import random
+from math import sin, cos, radians
 from phylo_tree.trees.indent import read as read_indent
 from phylo_tree.trees.newick import read as read_newick
 
@@ -95,6 +97,21 @@ class DrawTree(object):
         for node in self.walk():
             node.x = node.x - dx
             node.y = node.y - dy
+
+    def rotate(self, degrees):
+        """
+        Rotate the tree's coordinates around the center of the
+        bounding box.
+        """
+        angle = radians(degrees)
+        x, y = self.boundingbox
+        for node in self.walk():
+            x1 = node.x - x
+            y1 = node.y - y
+            x2 = x1 * cos(angle) - y1 * sin(angle)
+            y2 = x1 * sin(angle) + y1 * cos(angle)
+            node.x = x2 + x
+            node.y = y2 + y
 
     @property
     def coords(self):
@@ -229,7 +246,7 @@ def buildtree(path):
     a DrawTree object with coordinates and labels set up, ready
     for use in QGIS API.
     """
-    ext = os.path.splitext(path)
+    _, ext = os.path.splitext(path)
     if ext == '.nwk':
         nodetree = read_newick(path)
     elif ext == '.txt':
@@ -281,4 +298,21 @@ class Line(object):
 
 def bestfit(points):
     """Compute best fit line for points using least square method"""
-    pass
+    # Step 1: Calculate the means of the X and Y values
+    xs, ys = zip(*points)
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    
+    # Step 2: Calculate the slope
+    nm = sum([(x - mean_x) * (y - mean_y) for x, y in points])
+    dm = sum([(x - x_mean)^2 for x in xs])
+    slope = nm / dm
+    e
+    # Step 3: Calculate the Y intercept
+    intercept = mean_y - slope * mean_x
+    
+    # Step 4: Build and return line object
+    x1, x2 = random.sample(range(-10, 10), 2)
+    y1 = (x1 * slope) + intercept
+    y2 = (x2 * slope) + intercept
+    return Line( (x1, y1), (x2, y2) )

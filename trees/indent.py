@@ -61,7 +61,7 @@ def build_tree(lines):
                 return
         return level
 
-    return inner(items)
+    return inner(items)[0]
 
 def read(path):
     return build_tree(load_treefile(path))

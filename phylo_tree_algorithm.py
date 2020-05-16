@@ -169,7 +169,7 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
         if ext == '.nwk':
             tree = read_newick(fname)[0]
         if ext == '.txt':
-            tree = read_indent(fname)[0]
+            tree = read_indent(fname)
         
         # Run RT and get proportional tree node positions
         layout(tree)
