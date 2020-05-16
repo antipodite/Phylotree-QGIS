@@ -15,7 +15,7 @@
     At this point, indents should be 4 spaces.
 """
 from collections import namedtuple
-from .newick import Node
+from phylo_tree.trees.newick import Node
 
 INDENT_CHARS = ('\t', ' ')
 INDENT_LEVEL = 4
@@ -40,6 +40,9 @@ def load_treefile(path, indent_size=INDENT_LEVEL):
     return [process_line(l, indent_size) for l in lines]
 
 def build_tree(lines):
+
+    # Make a copy of items so this function has no
+    # bug inducing side effects from .pop()
     items = lines.copy()
 
     def inner(items, depth=0, level=[]):

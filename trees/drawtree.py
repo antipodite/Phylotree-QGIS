@@ -7,6 +7,9 @@
 
     Modifications (c) Isaac Stead 2020
 """
+import os
+from phylo_tree.trees.indent import read as read_indent
+from phylo_tree.trees.newick import read as read_newick
 
 class DrawTree(object):
     def __init__(self, tree, parent=None, depth=0, number=1):
@@ -24,6 +27,9 @@ class DrawTree(object):
         self._lmost_sibling = None
         #this is the number of the node in its group of siblings 1..n
         self.number = number
+        # The data from self.tree
+        self.name = None
+        self.length = None
 
     def left(self): 
         return self.thread or len(self.children) and self.children[0]
@@ -66,14 +72,29 @@ class DrawTree(object):
         return {node.tree: node.coords for node in self.walk()}
 
     @property
-    def max_xy(self):
-        all_xy = [(node.x, node.y) for node in self.walk()]
-        return map(max(zip(*all_xy)))
+    def boundingbox(self):
+        """
+        The central point of a box defined by the max and min coordinates
+        of the tree.
+        """
+        # Find the corners of the tree
+        all_coords = [(node.x, node.y) for node in self.walk()]
+        xs, ys = zip(*all_coords)
+        a = Line( (min(xs), min(ys)), (max(xs), max(ys)) )
+        b = Line( (min(xs), max(ys)), (max(xs), min(ys)) )
+        
+        return a.intersection(b)
 
-    @property
-    def min_xy(self):
-        all_xy = [(node.x, node.y) for node in self.walk()]
-        return map(min(zip(*all_xy)))
+    def translate(self, center):
+        """
+        Move all subtree's coordinates such that the central point
+        of the tree's bounding box is now `center`
+        """
+        old_center = self.boundingbox
+        dx, dy = Line(old_center, center).slope_xy()
+        for node in self.walk():
+            node.x = node.x - dx
+            node.y = node.y - dy
 
     @property
     def coords(self):
@@ -201,65 +222,63 @@ def layout(nodetree):
     for node in nodetree.walk():
         node.coord = positions[node]
 
-def translate(point, x, y):
-    px, py = point
-    return (px + x, py + y)
+def buildtree(path):
+    """The entry point into this module.
 
-def slope(a, b):
-    xa, ya = a
-    xb, yb = b
-    return (ya - yb) / (xa - xb)
-
-def intercept(point, slope):
-    x, y = point
-    return y - (slope * x)
-
-def line(a, b):
-    s = slope(a, b)
-    i = intercept(a, s)
-    return s, i
-
-def intersection(a, b, c, d):
-    try:
-        ab_s, ab_i = line(a, b)
-        cd_s, cd_i = line(c, d)
-        x = (cd_i - ab_i) / (ab_s - cd_s)
-        y = ab_s * ((cd_i - ab_i) / (ab_s - cd_s)) + ab_i
-    except ZeroDivisionError:
-        return False
-    return x, y
-
-# These should really all be methods of DrawTree its getting kinda
-# confusing 
-
-def treecenter(tree):
+    Takes a path to a tree in a supported file format and returns
+    a DrawTree object with coordinates and labels set up, ready
+    for use in QGIS API.
     """
-    Calculate the central point of the box formed by the maximum
-    extent of the tree
-    """
-    coords = [node.coord for node in tree.walk()]
-    xs = [coord[0] for coord in coords]
-    ys = [coord[1] for coord in coords]
-    max_x, min_x = max(xs), min(xs)
-    max_y, min_y = max(ys), min(ys)
-    return intersection(
-        (min_x, min_y), (max_x, max_y),
-        (min_x, max_y), (max_x, min_y)
-    )
+    ext = os.path.splitext(path)
+    if ext == '.nwk':
+        nodetree = read_newick(path)
+    elif ext == '.txt':
+        nodetree = read_indent(path)
+    else:
+        raise ValueError('Unsupported file type {}'.format(ext))
 
-def shiftxy(tree, point):
-    """
-    Calculate the x and y values for translation of an entire
-    tree such that the center of its bounding box now lies
-    over `point`.
-    """
-    new_x, new_y = point
-    old_x, old_y = treecenter(tree)
-    return new_x - old_x, new_y - old_y
+    drawtree = buchheim(nodetree)
+    for node in drawtree.walk():
+        node.name = node.tree.name
+        node.length = node.tree.length
 
-def translate_tree(tree):
-    shift_x, shift_y = shiftxy(tree)
-    for node in tree.walk():
-        old_x, old_y = node.coord
-        node.coord = (old_x - shift_x, old_y - shift_y)
-        
+    return drawtree
+
+class Line(object):
+    """Quick class to represent a line for geometry operations"""
+    
+    def __init__(self, point_a, point_b):
+        self.a = point_a
+        self.b = point_b
+
+    @property
+    def slope(self):
+        """The line's slope"""
+        xa, ya = self.a
+        xb, yb = self.b
+        return (ya - yb) / (xa - xb)
+
+    def slope_xy(self):
+        """Return the rise and run of the line segment a->b"""
+        xa, ya = self.a
+        xb, yb = self.b
+        return (xa - xb, ya - yb)
+
+    @property
+    def intercept(self):
+        """The line's y-intercept"""
+        x, y = self.a
+        return y - (self.slope * x)
+
+    def intersection(self, line):
+        """Return the point of intersection this and `line`"""
+        try:
+            x = (self.intercept - line.intercept) / (line.slope - self.slope)
+            y = self.slope * (x + self.intercept)
+        except ZeroDivisionError:
+            return False
+        return (x, y)
+
+def bestfit(points):
+    """Compute best fit line for points using least square method"""
+    pass
