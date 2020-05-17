@@ -113,12 +113,25 @@ class DrawTree(object):
             node.x = x2 + x
             node.y = y2 + y
 
+    def scale(self, scale_x, scale_y):
+        """
+        Increase distance between points while maintaining relative
+        distance between them.
+        """
+        x, y = self.boundingbox
+        for node in self.walk():
+            node.x = scale_x * (node.x - x) + x
+            node.y = scale_y * (node.y - y) + y
+
     @property
     def coords(self):
         return (self.x, self.y)
 
-    def __str__(self): return "%s: x=%s mod=%s" % (self.tree, self.x, self.mod)
-    def __repr__(self): return self.__str__()
+    def __str__(self):
+        return "%s: x=%s mod=%s" % (self.tree, self.x, self.mod)
+
+    def __repr__(self):
+        return self.__str__()
 
 def buchheim(tree):
     dt = firstwalk(DrawTree(tree))
