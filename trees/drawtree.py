@@ -65,13 +65,19 @@ class DrawTree(object):
             for n in node.walk():
                 yield n
 
+    def leaves(self):
+        """
+        Return a list of leaf nodes for this tree
+        """
+        return [node for node in self.walk() if not node.children]
+
     def all_positions(self):
         """
         Return a flat dict of self.tree: self.coords. Used to match
         calculated positions with nodes in the tree this DrawTree was 
         created from.
         """
-        return {node.tree: node.coords for node in self.walk()}
+        return {node.tree: node.coord for node in self.walk()}
 
     @property
     def boundingbox(self):
@@ -92,11 +98,10 @@ class DrawTree(object):
         Move all subtree's coordinates such that the central point
         of the tree's bounding box is now `center`
         """
-        old_center = self.boundingbox
-        dx, dy = Line(old_center, center).slope_xy()
+        dx, dy = Line(self.boundingbox, center).slope_xy()
         for node in self.walk():
-            node.x = node.x - dx
-            node.y = node.y - dy
+            node.x = node.x + dx
+            node.y = node.y + dy
 
     def rotate(self, degrees):
         """
@@ -124,7 +129,7 @@ class DrawTree(object):
             node.y = scale_y * (node.y - y) + y
 
     @property
-    def coords(self):
+    def coord(self):
         return (self.x, self.y)
 
     def __str__(self):
@@ -286,13 +291,13 @@ class Line(object):
         """The line's slope"""
         xa, ya = self.a
         xb, yb = self.b
-        return (ya - yb) / (xa - xb)
+        return (yb - ya) / (xb - xa)
 
     def slope_xy(self):
         """Return the rise and run of the line segment a->b"""
         xa, ya = self.a
         xb, yb = self.b
-        return (xa - xb, ya - yb)
+        return (xb - xa, yb - ya)
 
     @property
     def intercept(self):

@@ -43,7 +43,7 @@ from qgis.core import (QgsProcessing,
                        QgsPointXY,
                        QgsGeometry)
 from os.path import splitext
-from .trees import read_indent, read_newick, layout
+from phylo_tree.trees import drawtree
 
 class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
     """
@@ -163,38 +163,23 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
         logmsg = layer.sourceName() + ' ' + fname
         feedback.pushConsoleInfo(logmsg)
 
-        # Check the extension of INPUTTREE and select Newick or Indent
-        # loader as necessary
-        _, ext = splitext(fname)
-        if ext == '.nwk':
-            tree = read_newick(fname)[0]
-        if ext == '.txt':
-            tree = read_indent(fname)
-        
-        # Run RT and get proportional tree node positions
-        layout(tree)
-        nodes = [node for node in tree.walk()]
-        
-        # Translate proportional positions to map scale
-        root_pos = (45, 45) # TODO choose this more intelligently based on data
-        for i, node in  enumerate(nodes):
-            # Translate proportional positions to map scale
-            x, y = node.coord
-            rootx, rooty = root_pos
-            if not node.ancestor:
-                new_x, new_y = root_pos
-            else:
-                new_x = (self.SCALE_X * x) + rootx
-                new_y = (self.SCALE_Y * y) + rooty
-            # Now create node features with the translated positions
+        tree = drawtree.buildtree(fname)
+        feedback.pushConsoleInfo(str(tree.boundingbox))
+        center = (115, -33)
+        tree.translate(center)
+        feedback.pushConsoleInfo(str(tree.boundingbox))
+        tree.scale(self.SCALE_X, self.SCALE_Y)
+
+        # Now create node features with the translated positions
+        for i, node in enumerate(tree.walk()):
             feat = QgsFeature(out_fields)
             feat['id'] = i
             feat['label'] = node.name
             if node.ancestor:
                 feat['ancestor'] = node.ancestor.name
-            feat['startx'] = new_x
-            feat['starty'] = new_y
-            geom = QgsGeometry.fromPointXY(QgsPointXY(new_x, new_y)) # ???
+            feat['startx'] = node.x
+            feat['starty'] = node.y
+            geom = QgsGeometry.fromPointXY(QgsPointXY(node.x, node.y))
             feat.setGeometry(geom)
             sink.addFeature(feat, QgsFeatureSink.FastInsert)
 
@@ -204,7 +189,7 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
 
         # Get a list of leaf nodes and attempt to match them by name
         # with features from the source layer
-        leaves = tree.get_leaves()
+        leaves = tree.leaves()
 
         # Now we need to figure out how to draw the tree on a new layer.
         # - Seems like 
