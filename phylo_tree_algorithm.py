@@ -40,8 +40,11 @@ from qgis.core import (QgsProcessing,
                        QgsFields,
                        QgsField,
                        QgsFeature,
+                       QgsPoint,
                        QgsPointXY,
-                       QgsGeometry)
+                       QgsLineString,
+                       QgsGeometry,
+                       QgsWkbTypes)
 from os.path import splitext
 from phylo_tree.trees import drawtree
 
@@ -69,14 +72,9 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
     OUT_FIELDS = {
         'id':     QVariant.Int,
         'label':  QVariant.String,
-        'ancestor':  QVariant.String,
-        'startx': QVariant.Double,
-        'starty': QVariant.Double,
-        'endx':   QVariant.Double,
-        'endy':   QVariant.Double
     }
-    SCALE_X = 1.0
-    SCALE_Y = 1.0
+    SCALE_X = 8.0
+    SCALE_Y = 4.0
 
     def initAlgorithm(self, config):
         """
@@ -157,46 +155,86 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
         
         (sink, dest_id) = self.parameterAsSink(
             parameters, self.OUTPUT, context, out_fields,
-            layer.wkbType(), layer.sourceCrs()
+            QgsWkbTypes.LineString, layer.sourceCrs()
         )
 
-        logmsg = layer.sourceName() + ' ' + fname
-        feedback.pushConsoleInfo(logmsg)
+        feedback.pushConsoleInfo(str(layer.wkbType()))
 
         tree = drawtree.buildtree(fname)
-        feedback.pushConsoleInfo(str(tree.boundingbox))
         center = (115, -33)
-        tree.translate(center)
-        feedback.pushConsoleInfo(str(tree.boundingbox))
         tree.scale(self.SCALE_X, self.SCALE_Y)
+        tree.translate(center)
 
         # Now create node features with the translated positions
-        for i, node in enumerate(tree.walk()):
-            feat = QgsFeature(out_fields)
-            feat['id'] = i
-            feat['label'] = node.name
-            if node.ancestor:
-                feat['ancestor'] = node.ancestor.name
-            feat['startx'] = node.x
-            feat['starty'] = node.y
-            geom = QgsGeometry.fromPointXY(QgsPointXY(node.x, node.y))
-            feat.setGeometry(geom)
-            sink.addFeature(feat, QgsFeatureSink.FastInsert)
+        #points = self.create_point_features(tree)
+        lines = self.create_line_features(tree, out_fields)
+        sink.addFeatures(lines, QgsFeatureSink.FastInsert)
 
         # Get feature names and positions. Probably need to get user to
         # specify the feature field to match on
         features = layer.getFeatures()
-
-        # Get a list of leaf nodes and attempt to match them by name
-        # with features from the source layer
-        leaves = tree.leaves()
-
-        # Now we need to figure out how to draw the tree on a new layer.
-        # - Seems like 
-
+        links = self.link_leaves(tree, features, 'Language')
+        sink.addFeatures(links, QgsFeatureSink.FastInsert)
 
         return {self.OUTPUT: dest_id}
 
+    def link_leaves(self, tree, feats, fieldname):
+        """
+        Create Polylines linking leaves of tree to input layer
+        features
+        """
+        # Match leaf nodes up with features in input layer
+        matches = []
+        leaf_table = {leaf.name: leaf for leaf in tree.leaves()}
+        for f in feats:
+            try:
+                name = f[fieldname]
+                leaf = leaf_table[name]
+                matches.append( (leaf, f) )
+            except KeyError:
+                pass
+        # Create lines linking each pair
+        out = []
+        for leaf, feat in matches:
+            start = QgsPointXY(leaf.x, leaf.y)
+            end   = feat.geometry().asPoint()
+            line  = QgsGeometry.fromPolylineXY([start, end])
+            feat  = QgsFeature()
+            feat.setGeometry(line)
+            out.append(feat)
+        return out
+
+    def create_line_features(self, tree, fields):
+        out = []
+        for i, node in enumerate(tree.walk()):
+            if node.parent:
+                # Tree geometry
+                start = QgsPointXY(node.parent.x, node.parent.y)
+                end   = QgsPointXY(node.x, node.y)
+                line  = QgsGeometry.fromPolylineXY([start, end])
+                feat  = QgsFeature(fields)
+                feat.setGeometry(line)
+                # Tree labels
+                feat['id'], feat['label'] = i, node.name
+                out.append(feat)
+        return out
+    
+    def create_point_features(self, tree):
+        out = []
+        for i, node in enumerate(tree.walk()):
+            feat = QgsFeature(out_fields)
+            feat['id'] = i
+            feat['label'] = node.name
+            if node.parent:
+                feat['parent'] = node.parent.name
+            feat['startx'] = node.x
+            feat['starty'] = node.y
+            point = QgsPointXY(node.x, node.y)
+            points.append(point) # Save refs to points so can use in next step
+            geom = QgsGeometry.fromPointXY(point)
+            feat.setGeometry(geom)
+            out.append(feat)
+        return out
 
     def name(self):
         """
