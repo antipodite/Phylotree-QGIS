@@ -73,8 +73,8 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
         'id':     QVariant.Int,
         'label':  QVariant.String,
     }
-    SCALE_X = 8.0
-    SCALE_Y = 4.0
+    SCALE_X = 6.0
+    SCALE_Y = 8.0
 
     def initAlgorithm(self, config):
         """
@@ -165,13 +165,11 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
         tree.scale(self.SCALE_X, self.SCALE_Y)
         tree.translate(center)
 
-        # Now create node features with the translated positions
-        #points = self.create_point_features(tree)
-        lines = self.create_line_features(tree, out_fields)
-        sink.addFeatures(lines, QgsFeatureSink.FastInsert)
+        # Draw the tree on the map
+        polylines = self.create_line_tree(tree, out_fields)
+        sink.addFeatures(polylines, QgsFeatureSink.FastInsert)
 
-        # Get feature names and positions. Probably need to get user to
-        # specify the feature field to match on
+        # Link tree to input layer features
         features = layer.getFeatures()
         links = self.link_leaves(tree, features, 'Language')
         sink.addFeatures(links, QgsFeatureSink.FastInsert)
@@ -204,7 +202,23 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
             out.append(feat)
         return out
 
-    def create_line_features(self, tree, fields):
+    def create_square_tree(self, tree, fields):
+        linedata = tree.construct_squaretree()
+        polylines = []
+        for line in linedata:
+            name, start, end = line
+            x1, y1 = start
+            x2, y2 = end
+            startp = QgsPointXY(x1, y1)
+            endp   = QgsPointXY(x2, y2)
+            geom   = QgsGeometry.fromPolylineXY([startp, endp])
+            feat   = QgsFeature(fields)
+            feat.setGeometry(geom)
+            feat['label'] = name
+            polylines.append(feat)
+        return polylines
+
+    def create_line_tree(self, tree, fields):
         out = []
         for i, node in enumerate(tree.walk()):
             if node.parent:
@@ -219,7 +233,7 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
                 out.append(feat)
         return out
     
-    def create_point_features(self, tree):
+    def create_point_tree(self, tree):
         out = []
         for i, node in enumerate(tree.walk()):
             feat = QgsFeature(out_fields)

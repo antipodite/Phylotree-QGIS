@@ -78,7 +78,8 @@ class DrawTree(object):
         created from.
         """
         return {node.tree: node.coord for node in self.walk()}
-
+    
+    # Geometry methods
     @property
     def boundingbox(self):
         """
@@ -127,6 +128,56 @@ class DrawTree(object):
         for node in self.walk():
             node.x = scale_x * (node.x - x) + x
             node.y = scale_y * (node.y - y) + y
+
+    def construct_tree(self):
+        """
+        Using the current coordinates of the tree, return a list of
+        lines that can be used to draw the tree.
+        Returns a list of (name, (x, y), (x, y) ) tuples
+        """
+        out = []
+        for node in self.walk():
+            if node.parent:
+                start = (node.parent.x, node.parent.y)
+                end   = (node.x, node.y)
+                tup   = (node.name, start, end)
+                out.append(tup)
+        return out
+
+    def construct_squaretree(self):
+        """
+        Using the current coordinates of the tree, return a list of
+        lines that can be used to draw the tree like this:
+           |--------
+        ---|   |----
+           |---|----
+               |----
+        Returns a list of (name, (x, y), (x, y) ) tuples
+        """
+        out = []
+        # BUG this value depends on the orientation of the tree
+        base_y = max([leaf.y for leaf in self.leaves()])
+        for node in self.walk():
+            # If this is a leaf node, draw a line all the way to the bottom
+            if not node.children:
+                start = (node.x, node.y)
+                end   = (node.x, base_y)
+                tup   = (node.name, start, end)
+                out.append(tup)
+            else:
+                # Draw a line down to the next Y level
+                vstart = (node.x, node.y)
+                vend   = (node.x, node.children[0].y)
+                vtup   = (node.name, vstart, vend)
+                # Draw a horizontal line linking the children
+                # BUG the map projection fucks with this. Need a
+                # line connecting all child node points
+                lmost, rmost = node.children[0], node.children[-1]
+                hstart = (lmost.x, lmost.y)
+                hend   = (rmost.x, rmost.y)
+                htup   = (None, hstart, hend)
+                out.extend([vtup, htup])   
+        return out
 
     @property
     def coord(self):
