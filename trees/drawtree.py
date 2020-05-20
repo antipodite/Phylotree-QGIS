@@ -5,7 +5,7 @@
     Will work on any tree representation that has a list of descendants
     for each node as a property of that node.
 
-    Modifications (c) Isaac Stead 2020
+    (c) Isaac Stead 2020
 """
 import os
 import random
@@ -80,7 +80,6 @@ class DrawTree(object):
         return {node.tree: node.coord for node in self.walk()}
     
     # Geometry methods
-    @property
     def boundingbox(self):
         """
         The central point of a box defined by the max and min coordinates
@@ -99,7 +98,7 @@ class DrawTree(object):
         Move all subtree's coordinates such that the central point
         of the tree's bounding box is now `center`
         """
-        dx, dy = Line(self.boundingbox, center).slope_xy()
+        dx, dy = Line(self.boundingbox(), center).slope_xy()
         for node in self.walk():
             node.x = node.x + dx
             node.y = node.y + dy
@@ -110,7 +109,7 @@ class DrawTree(object):
         bounding box.
         """
         angle = radians(degrees)
-        x, y = self.boundingbox
+        x, y = self.boundingbox()
         for node in self.walk():
             x1 = node.x - x
             y1 = node.y - y
@@ -124,7 +123,7 @@ class DrawTree(object):
         Increase distance between points while maintaining relative
         distance between them.
         """
-        x, y = self.boundingbox
+        x, y = self.boundingbox()
         for node in self.walk():
             node.x = scale_x * (node.x - x) + x
             node.y = scale_y * (node.y - y) + y
@@ -299,14 +298,28 @@ def second_walk(v, m=0, depth=0, min=None):
 
     return min
 
-def layout(nodetree):
-    """
-    Calculate and add positions for python-newick Node tree
-    """
-    drawtree = buchheim(nodetree)
-    positions = drawtree.all_positions()
-    for node in nodetree.walk():
-        node.coord = positions[node]
+def phylogram(tree):
+    """Assign X and Y values to draw the tree as a phylogram"""
+    leaves = []
+    
+    def first_walk(t, depth):
+        for node in t.children:
+            first_walk(node, depth + 1)
+        if not t.children:
+            t.y = len(leaves)
+            leaves.append(t)
+        t.x = depth
+
+    def second_walk(t):
+        for node in t.children:
+            second_walk(node)
+        if t.children:
+            t.y = sum([c.y for c in t.children]) / len(t.children)
+        else:
+            t.x = max([l.x for l in leaves])
+
+    first_walk(tree, 0)
+    second_walk(tree)
 
 def buildtree(path):
     """The entry point into this module.
@@ -376,7 +389,6 @@ def bestfit(points):
     nm = sum([(x - mean_x) * (y - mean_y) for x, y in points])
     dm = sum([(x - x_mean)^2 for x in xs])
     slope = nm / dm
-    e
     # Step 3: Calculate the Y intercept
     intercept = mean_y - slope * mean_x
     
