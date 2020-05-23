@@ -70,14 +70,6 @@ class DrawTree(object):
         Return a list of leaf nodes for this tree
         """
         return [node for node in self.walk() if not node.children]
-
-    def all_positions(self):
-        """
-        Return a flat dict of self.tree: self.coords. Used to match
-        calculated positions with nodes in the tree this DrawTree was 
-        created from.
-        """
-        return {node.tree: node.coord for node in self.walk()}
     
     # Geometry methods
     def boundingbox(self):
@@ -98,7 +90,7 @@ class DrawTree(object):
         Move all subtree's coordinates such that the central point
         of the tree's bounding box is now `center`
         """
-        dx, dy = Line(self.boundingbox(), center).slope_xy()
+        dx, dy = Line(self.boundingbox(), center).slope_xy
         for node in self.walk():
             node.x = node.x + dx
             node.y = node.y + dy
@@ -143,41 +135,84 @@ class DrawTree(object):
                 out.append(tup)
         return out
 
-    def construct_squaretree(self):
+    def phylogram(self):
         """
-        Using the current coordinates of the tree, return a list of
-        lines that can be used to draw the tree like this:
-           |--------
-        ---|   |----
-           |---|----
-               |----
+        Transform the coordinates of the tree to a rectangular phylogram.
+        All leaf nodes are drawn at the 'base'
+        """
+        leaves = []
+        
+        def first_walk(t, depth):
+            for node in t.children:
+                first_walk(node, depth + 1)
+            if not t.children:
+                t.y = len(leaves)
+                leaves.append(t)
+            t.x = depth
+
+        def second_walk(t):
+            for node in t.children:
+                second_walk(node)
+            if t.children:
+                t.y = sum([c.y for c in t.children]) / len(t.children)
+            else:
+                t.x = max([l.x for l in leaves])
+
+        first_walk(self, 0)
+        second_walk(self)
+        self.max_depth = max([l.x for l in leaves])
+
+    def construct_phylogram(self, orientation=None):
+        """
+        Using the current coordinates of the tree, return a list of lines
+        that can be used to draw it as a rectangular phylogram.
         Returns a list of (name, (x, y), (x, y) ) tuples
         """
-        out = []
-        # BUG this value depends on the orientation of the tree
-        base_y = max([leaf.y for leaf in self.leaves()])
-        for node in self.walk():
-            # If this is a leaf node, draw a line all the way to the bottom
+        # FIXME this actually a cladogram as it only represents the
+        # topology rather than a phylogram that represents distance as
+        # length
+        max_x   = self.max_depth
+        space_x = (self.x + self.children[0].x) / 2
+        out     = []
+
+        def horizontal(node):
             if not node.children:
-                start = (node.x, node.y)
-                end   = (node.x, base_y)
-                tup   = (node.name, start, end)
-                out.append(tup)
+                start = Point(node.parent.x + space_x, node.y)
             else:
-                # Draw a line down to the next Y level
-                vstart = (node.x, node.y)
-                vend   = (node.x, node.children[0].y)
-                vtup   = (node.name, vstart, vend)
-                # Draw a horizontal line linking the children
-                # BUG the map projection fucks with this. Need a
-                # line connecting all child node points
-                lmost, rmost = node.children[0], node.children[-1]
-                hstart = (lmost.x, lmost.y)
-                hend   = (rmost.x, rmost.y)
-                htup   = (None, hstart, hend)
-                out.extend([vtup, htup])   
+                start = Point(node.x - space_x, node.y)
+            end = Point(node.x + space_x, node.y)
+            return Line(start, end)
+
+        def vertical(node):
+            x     = node.x + space_x
+            start = Point(x, node.children[0].y)
+            end   = Point(x, node.children[-1].y)
+            return Line(start, end)
+
+        for node in self.walk():
+            out.append(horizontal(node))
+            if node.children:
+                out.append(vertical(node))
+
         return out
 
+def rotate_phylogram(lines, angle):
+    """
+    I have a list of Lines and I want to rotate them around the
+    centre of the tree's bounding box
+    """
+    # Find the corners of the tree
+    all_points = [point for line in lines for point in line]
+    xs, ys = zip(*all_points)
+    a = Line( (min(xs), min(ys)), (max(xs), max(ys)) )
+    b = Line( (min(xs), max(ys)), (max(xs), min(ys)) )
+    
+    centre = a.intersection(b)
+
+    rotated = [line.rotate(angle, centre) for line in lines]
+
+    return rotated
+        
     @property
     def coord(self):
         return (self.x, self.y)
@@ -298,29 +333,6 @@ def second_walk(v, m=0, depth=0, min=None):
 
     return min
 
-def phylogram(tree):
-    """Assign X and Y values to draw the tree as a phylogram"""
-    leaves = []
-    
-    def first_walk(t, depth):
-        for node in t.children:
-            first_walk(node, depth + 1)
-        if not t.children:
-            t.y = len(leaves)
-            leaves.append(t)
-        t.x = depth
-
-    def second_walk(t):
-        for node in t.children:
-            second_walk(node)
-        if t.children:
-            t.y = sum([c.y for c in t.children]) / len(t.children)
-        else:
-            t.x = max([l.x for l in leaves])
-
-    first_walk(tree, 0)
-    second_walk(tree)
-
 def buildtree(path):
     """The entry point into this module.
 
@@ -343,6 +355,34 @@ def buildtree(path):
 
     return drawtree
 
+class Point(object):
+    """A point in the 2D plane. What else is there to say?"""
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def rotate(self, p, angle):
+        """Rotate this point around `p`"""
+        angle = radians(angle)
+        x, y = p
+        x1 = self.x - x
+        y1 = self.y - y
+        x2 = x1 * cos(angle) - y1 * sin(angle)
+        y2 = x1 * sin(angle) + y1 * cos(angle)
+        px = round(x2 + x)
+        py = round(y2 + y)
+        return Point(px, py)
+    
+    def __iter__(self):
+        return iter( (self.x, self.y) )
+
+    def __str__(self):
+        return 'Point({} {})'.format(self.x, self.y)
+
+    def __repr__(self):
+        return self.__str__()
+
 class Line(object):
     """Quick class to represent a line for geometry operations"""
     
@@ -357,6 +397,7 @@ class Line(object):
         xb, yb = self.b
         return (yb - ya) / (xb - xa)
 
+    @property
     def slope_xy(self):
         """Return the rise and run of the line segment a->b"""
         xa, ya = self.a
@@ -369,6 +410,11 @@ class Line(object):
         x, y = self.a
         return y - (self.slope * x)
 
+    @property
+    def midpoint(self):
+        """Return the middle point of the line segment"""
+        return ( (self.a.x + self.b.x) / 2, (self.a.y + self.b.y) / 2 )
+
     def intersection(self, line):
         """Return the point of intersection this and `line`"""
         try:
@@ -376,7 +422,23 @@ class Line(object):
             y = self.slope * (x + self.intercept)
         except ZeroDivisionError:
             return False
-        return (x, y)
+        return Point(x, y)
+
+    def rotate(self, angle, point=None):
+        """Rotate the line around centre or point"""
+        if not point:
+            point = self.midpoint
+        return Line(self.b.rotate(point, angle),
+                    self.a.rotate(point, angle))
+
+    def __iter__(self):
+        return iter( (self.a, self.b) )
+
+    def __str__(self):
+        return 'LineSegment({} {})'.format(self.a, self.b)
+
+    def __repr__(self):
+        return self.__str__()
 
 def bestfit(points):
     """Compute best fit line for points using least square method"""
@@ -393,6 +455,7 @@ def bestfit(points):
     intercept = mean_y - slope * mean_x
     
     # Step 4: Build and return line object
+    # FIXME base this on the range of X and Y in the points
     x1, x2 = random.sample(range(-10, 10), 2)
     y1 = (x1 * slope) + intercept
     y2 = (x2 * slope) + intercept

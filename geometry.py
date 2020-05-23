@@ -3,6 +3,28 @@
 
     Isaac Stead 2020
 """
+from collections import namedtuple
+
+class Point(object):
+    """A 2D point. What else is there to say?"""
+    
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def polar_angle(self):
+        pass
+
+    def __iter__(self):
+        """This is what allows use of the tuple unpacking syntax"""
+        return (self.x, self.y)
+
+    def __str__(self):
+        return 'Point({}, {})'.format(self.x, self.y)
+
+    def __repr__(self):
+        return self.__str__()
+
 class Line(object):
     """Quick class to represent a line for geometry operations"""
     
@@ -38,6 +60,17 @@ class Line(object):
             return False
         return (x, y)
 
+    def divide(self, points):
+        """Return lists of given points which lie above and below line"""
+        above, below = []
+        for point in points:
+            x, y = point
+            if y > self.slope * x + b:
+                above.append(point)
+            else:
+                below.append(point)
+        return (above, below)
+
 def bestfit(points):
     """Compute best fit line for points using least square method"""
     # Step 1: Calculate the means of the X and Y values
@@ -64,3 +97,7 @@ def centroid(points):
     xs, ys = zip(*points)
     x, y = 1 / n * sum(xs), 1 / n * sum(ys)
     return (x, y)
+
+def convex_hull(points):
+    """Jarvis' algorithm: compute the convex hull of `points`"""
+    pass

@@ -31,6 +31,7 @@ __copyright__ = '(C) 2020 by Isaac Stead'
 __revision__ = '$Format:%H$'
 
 from qgis.PyQt.QtCore import QCoreApplication, QVariant
+from qgis import processing
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
                        QgsProcessingAlgorithm,
@@ -139,6 +140,13 @@ class PhyloTreeAlgorithm(QgsProcessingAlgorithm):
         sink.addFeatures(links, QgsFeatureSink.FastInsert)
 
         return {self.OUTPUT: dest_id}
+
+    def position_tree(self, tree, inputlayer):
+        """
+        Using the convex hull of the points in the input layer,
+        determine the best place to draw the tree.
+        """
+        pass
 
     def link_leaves(self, tree, feats, fieldname):
         """
